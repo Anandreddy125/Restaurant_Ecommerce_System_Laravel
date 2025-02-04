@@ -1,10 +1,10 @@
-# Use an official PHP runtime as base image
+# Use an official PHP runtime as a base image
 FROM php:8.2-fpm
 
-# Set the working directory in the container
+# Set the working directory
 WORKDIR /var/www/html
 
-# Install system dependencies
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     libonig-dev \
-    libzip-dev && \  # <-- Add this line to install libzip
+    libzip-dev && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install gd pdo pdo_mysql mbstring zip
 
