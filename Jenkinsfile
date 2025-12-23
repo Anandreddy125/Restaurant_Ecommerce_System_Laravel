@@ -143,4 +143,3 @@ stage('Test Kube Access') {
     }
 }
 // sonarqube down 
-// sonar token issue
