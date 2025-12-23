@@ -1,10 +1,10 @@
-# Use an official PHP runtime as a base image
+# Use official PHP runtime
 FROM php:8.1-fpm
 
-# Set the working directory
+# Set working directory
 WORKDIR /var/www/html
 
-# Install system dependencies and PHP extensions
+# Install system dependencies & PHP extensions
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -22,23 +22,20 @@ RUN apt-get update && apt-get install -y \
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Copy existing application directory contents
-COPY . /var/www/html
+# Copy application source
+COPY . .
 
-# Ensure .env file exists
-COPY /var/www/html/.env
-
-# Set proper permissions for Laravel storage and bootstrap/cache
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Set permissions
+RUN chown -R www-data:www-data storage bootstrap/cache
 
 # Install Laravel dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Copy Nginx configuration
-COPY ./nginx/default.conf /etc/nginx/sites-available/default
+# Copy Nginx config
+COPY nginx/default.conf /etc/nginx/sites-available/default
 
-# Expose port 80 for Nginx
+# Expose port
 EXPOSE 80
 
-# Start both PHP-FPM and Nginx
+# Start services
 CMD service nginx start && php-fpm
