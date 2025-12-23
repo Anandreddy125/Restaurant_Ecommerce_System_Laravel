@@ -6,7 +6,7 @@ pipeline {
         timeout(time: 60, unit: 'MINUTES')
     }
     environment {
-        GIT_REPO           = "https://github.com/Anandreddy125/project-management.git"
+        GIT_REPO           = "https://github.com/Anandreddy125/Restaurant_Ecommerce_System_Laravel.git"
         GIT_CREDENTIALS_ID = "github-anand"
         DOCKER_CREDENTIALS_ID = "docker-test"
         IMAGE_NAME            = "anrs125/testing-repo"
