@@ -133,27 +133,21 @@ ROLLBACK    : ${params.ROLLBACK}
                 }
             }
         }
+
         stage('Deploy to Kubernetes') {
-            when { expression { return !params.ROLLBACK } }
+            when { expression { env.IMAGE_TAG } }
             steps {
-                script {
-                    dir('deployments') {
-                        withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
-                            echo "Deploying ${env.IMAGE_NAME}:${env.IMAGE_TAG} to ${env.DEPLOY_ENV} ..."
-                            sh """
-                                sed -i 's|image: ${env.IMAGE_NAME}:.*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
-                                kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE}
-                                kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} || {
-                                    echo ":warning: Deployment failed, rolling back..."
-                                    kubectl rollout undo deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE}
-                                    exit 1
-                                }
-                            """
-                        }
+                dir('deployments') {
+                    withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
+                        sh """
+                          sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
+                          kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE} --validate=false
+                          kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} --timeout=10m
+                        """
                     }
                 }
             }
         }
+
     } // stages
 } // pipeline
-//docker cred issues on jenkinsfile
