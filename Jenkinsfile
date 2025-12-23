@@ -133,14 +133,21 @@ ROLLBACK    : ${params.ROLLBACK}
                 }
             }
         }
-stage('Test Kube Access') {
+stage('Deploy Application') {
+    when { expression { env.IMAGE_TAG } }
     steps {
-        withKubeConfig(credentialsId: 'k3s-testing') {
-            sh 'kubectl get nodes'
+        dir('deployments') {
+            withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
+                sh """
+                    sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|g' ${env.DEPLOYMENT_FILE}
+                    kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE} --validate=false
+                    kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} --timeout=10m
+                """
+            }
         }
     }
 }
-    }
+    }\
 }
 // sonarqube down
 // 
