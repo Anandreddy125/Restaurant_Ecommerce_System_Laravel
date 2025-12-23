@@ -133,13 +133,19 @@ ROLLBACK    : ${params.ROLLBACK}
                 }
             }
         }
-stage('Test Kube Access') {
-    steps {
-        withKubeConfig(credentialsId: 'k3s-testing') {
-            sh 'kubectl get nodes'
+        stage('Deploy to Kubernetes') {
+            steps {
+                dir('kubernetes') {
+                    withKubeConfig(credentialsId: KUBERNETES_CREDENTIALS_ID) {
+                        sh """
+                            kubectl get no
+                            kubectl get ns
+                            kubectl get po -A
+                        """
+                    }
+                }
+            }
         }
-    }
-}
     }
 }
 // sonarqube down
