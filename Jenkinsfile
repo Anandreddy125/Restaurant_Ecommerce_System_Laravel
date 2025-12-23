@@ -48,7 +48,7 @@ pipeline {
             steps {
                 script {
                     env.DEPLOY_ENV = "staging"
-                    env.IMAGE_NAME = "anrs125/testing-repo"
+                    env.IMAGE_NAME = "anrs125/staging-image"
                     env.KUBERNETES_CREDENTIALS_ID = "k3s-testing"
                     env.DEPLOYMENT_FILE = "staging-report.yaml"
                     env.DEPLOYMENT_NAME = "staging-reports-api"
@@ -67,7 +67,7 @@ pipeline {
             steps {
                 script {
                     env.DEPLOY_ENV = "production"
-                    env.IMAGE_NAME = "anrs125/testing-repo"
+                    env.IMAGE_NAME = "anrs125/staging-image"
                     env.KUBERNETES_CREDENTIALS_ID = "k3s-testing"
                     env.DEPLOYMENT_FILE = "prod-reports.yaml"
                     env.DEPLOYMENT_NAME = "prod-reports-api"
@@ -154,39 +154,6 @@ stage('Quality Gate') {
                     }
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            slackSend(
-                channel: '#jenkins-alerts',
-                color: '#36A64F',
-                tokenCredentialId: 'slack-token',
-                message: """
-✅ Deployment Successful
-Env: ${env.DEPLOY_ENV}
-Image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}
-${env.BUILD_URL}
-"""
-            )
-        }
-
-        failure {
-            slackSend(
-                channel: '#jenkins-alerts',
-                color: '#FF0000',
-                tokenCredentialId: 'slack-token',
-                message: """
-❌ Deployment Failed
-Env: ${env.DEPLOY_ENV}
-${env.BUILD_URL}
-"""
-            )
-        }
-
-        always {
-            cleanWs()
         }
     }
 }
