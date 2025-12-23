@@ -133,19 +133,23 @@ ROLLBACK    : ${params.ROLLBACK}
                 }
             }
         }
-        stage('Deploy to Kubernetes') {
-            steps {
-                dir('kubernetes') {
-                    withKubeConfig(credentialsId: KUBERNETES_CREDENTIALS_ID) {
-                        sh """
-                            kubectl get no
-                            kubectl get ns
-                            kubectl get po -A
-                        """
-                    }
-                }
+stage('Deploy to Kubernetes') {
+    steps {
+        dir('kubernetes') {
+            sh """
+                # Add hosts entry temporarily
+                echo "172.31.12.195 kubernetes.local" | sudo tee -a /etc/hosts
+            """
+            withKubeConfig(credentialsId: KUBERNETES_CREDENTIALS_ID) {
+                sh """
+                    kubectl get no
+                    kubectl get ns
+                    kubectl get po -A
+                """
             }
         }
+    }
+}
     }
 }
 // sonarqube down
