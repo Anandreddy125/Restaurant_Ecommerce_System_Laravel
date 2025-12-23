@@ -23,17 +23,18 @@ pipeline {
         string(
             name: 'ROLLBACK_TAG',
             defaultValue: '',
-            description: 'Docker tag to rollback to (example: v1.2.1)'
+            description: 'Docker tag to rollback to'
         )
     }
 
     stages {
+
         stage('Context') {
             steps {
                 echo """
- BRANCH_NAME : ${env.BRANCH_NAME}
- TAG_NAME    : ${env.TAG_NAME}
- ROLLBACK    : ${params.ROLLBACK}
+BRANCH_NAME : ${env.BRANCH_NAME}
+TAG_NAME    : ${env.TAG_NAME}
+ROLLBACK    : ${params.ROLLBACK}
 """
             }
         }
@@ -102,22 +103,15 @@ pipeline {
             }
         }
 
-    //    stage('Quality Gate') {
-      //      when { expression { env.IMAGE_TAG } }
-       //     steps {
-         //       timeout(time: 3, unit: 'MINUTES') {
-           //         waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
-             //   }
-          //  }
-       // }
-stage('Quality Gate') {
-    when { expression { env.IMAGE_TAG } }
-    steps {
-        timeout(time: 10, unit: 'MINUTES') {
-            waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
+        stage('Quality Gate') {
+            when { expression { env.IMAGE_TAG } }
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
+                }
+            }
         }
-    }
-}
+
         stage('Docker Build & Push') {
             when {
                 allOf {
@@ -140,36 +134,20 @@ stage('Quality Gate') {
             }
         }
 
-//        stage('Deploy to Kubernetes') {
-//            when { expression { env.IMAGE_TAG } }
-//            steps {
-//                dir('deployments') {
-//                    withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
-//                        sh """
-//                            sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
-//  
- //                         kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE}
-//                            kubectl rollout status deployment/${env.DEPLOYMENT_NAME} \
-//                              -n ${env.NAMESPACE} --timeout=10m
-//                        """
-//                    }
- //               }
-  //          }
-//        }
-//    }
-stage('Deploy to Kubernetes') {
-    when { expression { env.IMAGE_TAG } }
-    steps {
-        dir('deployments') {
-            withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
-                sh """
-                  sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
-                  kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE} --validate=false
-                  kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} --timeout=10m
-                """
+        stage('Deploy to Kubernetes') {
+            when { expression { env.IMAGE_TAG } }
+            steps {
+                dir('deployments') {
+                    withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
+                        sh """
+                          sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
+                          kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE} --validate=false
+                          kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} --timeout=10m
+                        """
+                    }
+                }
             }
         }
-    }
-}
 
-}
+    } // stages
+} // pipeline
