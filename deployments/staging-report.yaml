@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-reports-api
+  namespace: testing
+  labels:
+    app: staging-reports
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: staging-reports
+  template:
+    metadata:
+      labels:
+        app: staging-reports
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: reports-api
+          image: anrs125/reports-tesing:staging-c439f90
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-reports
+  namespace: testing
+  labels:
+    app: staging-reports
+spec:
+  selector:
+    app: staging-reports
+  type: NodePort
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+      nodePort: 31000

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prod-reports-api
+  namespace: testing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prod-reports
+  template:
+    metadata:
+      labels:
+        app: prod-reports
+    spec:
+      containers:
+        - name: reports-api
+          image: anrs125/testing-repo:staging-c1e9550
+          ports:
+            - containerPort: 9000
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prod-reports
+  namespace: testing
+spec:
+  selector:
+    app: prod-reports
+  type: NodePort
+  ports:
+    - name: php
+      port: 9000
+      targetPort: 9000
+      nodePort: 31001
