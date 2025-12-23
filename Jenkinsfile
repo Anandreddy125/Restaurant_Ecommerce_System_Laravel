@@ -102,15 +102,22 @@ pipeline {
             }
         }
 
-        stage('Quality Gate') {
-            when { expression { env.IMAGE_TAG } }
-            steps {
-                timeout(time: 3, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
-                }
-            }
+    //    stage('Quality Gate') {
+      //      when { expression { env.IMAGE_TAG } }
+       //     steps {
+         //       timeout(time: 3, unit: 'MINUTES') {
+           //         waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
+             //   }
+          //  }
+       // }
+stage('Quality Gate') {
+    when { expression { env.IMAGE_TAG } }
+    steps {
+        timeout(time: 10, unit: 'MINUTES') {
+            waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
         }
-
+    }
+}
         stage('Docker Build & Push') {
             when {
                 allOf {
