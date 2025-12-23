@@ -151,3 +151,4 @@ ROLLBACK    : ${params.ROLLBACK}
 
     } // stages
 } // pipeline
+//docker cred issues on jenkinsfile
