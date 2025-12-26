@@ -151,3 +151,7 @@ stage('Deploy Application') {
 }
 // sonarqube down
 // 
+//production is working but staging is not working
+// production deployments is working good.
+// staging trobleshooting
+// testing 
