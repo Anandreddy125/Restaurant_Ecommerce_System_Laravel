@@ -8,9 +8,10 @@ pipeline {
     }
 
     environment {
-        SCANNER_HOME = tool('sonar-scanner')
-        SONARQUBE_ENV = "sonar-server"
-        NAMESPACE = "testing"
+        SCANNER_HOME          = tool('sonar-scanner')
+        SONARQUBE_ENV         = "sonar-server"
+        NAMESPACE             = "testing"
+        DOCKER_CREDENTIALS_ID = "docker-test"
     }
 
     parameters {
@@ -47,12 +48,12 @@ ROLLBACK    : ${params.ROLLBACK}
             }
             steps {
                 script {
-                    env.DEPLOY_ENV = "staging"
-                    env.IMAGE_NAME = "anrs125/staging-image"
+                    env.DEPLOY_ENV                = "staging"
+                    env.IMAGE_NAME                = "anrs125/staging-image"
                     env.KUBERNETES_CREDENTIALS_ID = "k3s-testing"
-                    env.DEPLOYMENT_FILE = "staging-report.yaml"
-                    env.DEPLOYMENT_NAME = "staging-reports-api"
-                    env.IMAGE_TAG = "staging-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
+                    env.DEPLOYMENT_FILE           = "staging-report.yaml"
+                    env.DEPLOYMENT_NAME           = "staging-reports-api"
+                    env.IMAGE_TAG                 = "staging-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
                 }
             }
         }
@@ -66,12 +67,12 @@ ROLLBACK    : ${params.ROLLBACK}
             }
             steps {
                 script {
-                    env.DEPLOY_ENV = "production"
-                    env.IMAGE_NAME = "anrs125/staging-image"
+                    env.DEPLOY_ENV                = "production"
+                    env.IMAGE_NAME                = "anrs125/staging-image"
                     env.KUBERNETES_CREDENTIALS_ID = "k3s-testing"
-                    env.DEPLOYMENT_FILE = "prod-reports.yaml"
-                    env.DEPLOYMENT_NAME = "prod-reports-api"
-                    env.IMAGE_TAG = env.TAG_NAME
+                    env.DEPLOYMENT_FILE           = "prod-reports.yaml"
+                    env.DEPLOYMENT_NAME           = "prod-reports-api"
+                    env.IMAGE_TAG                 = env.TAG_NAME
                 }
             }
         }
@@ -111,6 +112,25 @@ ROLLBACK    : ${params.ROLLBACK}
             }
         }
 
+        /* 🔐 DOCKER LOGIN */
+        stage('Docker Login') {
+            when {
+                expression { env.IMAGE_TAG && !params.ROLLBACK }
+            }
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: env.DOCKER_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh """
+                        echo "\$DOCKER_PASSWORD" | docker login -u "\$DOCKER_USER" --password-stdin
+                    """
+                }
+            }
+        }
+
+        /* 🐳 DOCKER BUILD & PUSH */
         stage('Docker Build & Push') {
             when {
                 expression { env.IMAGE_TAG && !params.ROLLBACK }
@@ -118,16 +138,18 @@ ROLLBACK    : ${params.ROLLBACK}
             steps {
                 script {
                     def imageFull = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-                    echo "🐳 Building & pushing ${imageFull}"
+                    echo "🐳 Building Docker image: ${imageFull}"
 
                     sh """
                         docker build --pull --no-cache -t ${imageFull} .
                         docker push ${imageFull}
+                        docker logout
                     """
                 }
             }
         }
 
+        /* 🚀 DEPLOY TO KUBERNETES */
         stage('Deploy to Kubernetes') {
             when {
                 expression { env.IMAGE_TAG }
@@ -145,7 +167,7 @@ ROLLBACK    : ${params.ROLLBACK}
                             kubectl rollout status deployment/${env.DEPLOYMENT_NAME} \
                               -n ${env.NAMESPACE} \
                               --timeout=10m || {
-                                echo "❌ Rollout failed → performing rollback"
+                                echo "❌ Rollout failed → rolling back"
                                 kubectl rollout undo deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE}
                                 exit 1
                               }
@@ -156,6 +178,3 @@ ROLLBACK    : ${params.ROLLBACK}
         }
     }
 }
-
-
-// on k3s cluster i have issue now it resloved.
