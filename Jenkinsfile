@@ -15,16 +15,8 @@ pipeline {
     }
 
     parameters {
-        booleanParam(
-            name: 'ROLLBACK',
-            defaultValue: false,
-            description: 'Enable rollback deployment'
-        )
-        string(
-            name: 'ROLLBACK_TAG',
-            defaultValue: '',
-            description: 'Docker tag to rollback to (example: v1.2.1)'
-        )
+        booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Enable rollback deployment')
+        string(name: 'ROLLBACK_TAG', defaultValue: '', description: 'Docker tag to rollback to')
     }
 
     stages {
@@ -84,7 +76,7 @@ ROLLBACK    : ${params.ROLLBACK}
             steps {
                 script {
                     env.IMAGE_TAG = params.ROLLBACK_TAG
-                    echo "🔁 Rolling back to image tag: ${env.IMAGE_TAG}"
+                    echo "🔁 Rolling back to ${env.IMAGE_TAG}"
                 }
             }
         }
@@ -114,45 +106,46 @@ ROLLBACK    : ${params.ROLLBACK}
 
         stage('Docker Build & Push') {
             when {
-                allOf {
-                    expression { env.IMAGE_TAG }
-                    expression { !params.ROLLBACK }
-                }
+                expression { env.IMAGE_TAG && !params.ROLLBACK }
             }
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: env.DOCKER_CREDENTIALS_ID,
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
+                script {
+                    def imageFull = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                    echo "🐳 Building Docker image: ${imageFull}"
+
                     sh """
-                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                        docker build --no-cache -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} .
-                        docker push ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+                        docker build --pull --no-cache -t ${imageFull} .
+                        docker push ${imageFull}
                     """
                 }
             }
         }
-stage('Deploy Application') {
-    when { expression { env.IMAGE_TAG } }
-    steps {
-        dir('deployments') {
-            withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
-                sh """
-                    sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|g' ${env.DEPLOYMENT_FILE}
-                    kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE} --validate=false
-                    kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} --timeout=10m
-                """
+
+        stage('Deploy to Kubernetes') {
+            when {
+                expression { env.IMAGE_TAG }
+            }
+            steps {
+                dir('deployments') {
+                    withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
+                        sh """
+                            sed -i 's|image: ${env.IMAGE_NAME}:.*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
+
+                            kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE}
+
+                            kubectl rollout status deployment/${env.DEPLOYMENT_NAME} \
+                              -n ${env.NAMESPACE} \
+                              --timeout=10m || {
+                                echo "Rollout failed. Rolling back..."
+                                kubectl rollout undo deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE}
+                                exit 1
+                              }
+                        """
+                    }
+                }
             }
         }
     }
 }
-    }\
-}
-// sonarqube down
-// 
-//production is working but staging is not working
-// production deployments is working good.
-// staging trobleshooting
-// testing 
-// testing with ishanu
+
+// on k3s cluster i have issue now it resloved.
