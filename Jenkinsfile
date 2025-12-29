@@ -11,12 +11,19 @@ pipeline {
         SCANNER_HOME = tool('sonar-scanner')
         SONARQUBE_ENV = "sonar-server"
         NAMESPACE = "testing"
-        DOCKER_CREDENTIALS_ID = "docker-test"
     }
 
     parameters {
-        booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Enable rollback deployment')
-        string(name: 'ROLLBACK_TAG', defaultValue: '', description: 'Docker tag to rollback to')
+        booleanParam(
+            name: 'ROLLBACK',
+            defaultValue: false,
+            description: 'Enable rollback deployment'
+        )
+        string(
+            name: 'ROLLBACK_TAG',
+            defaultValue: '',
+            description: 'Docker tag to rollback to'
+        )
     }
 
     stages {
@@ -69,14 +76,14 @@ ROLLBACK    : ${params.ROLLBACK}
             }
         }
 
-        stage('Rollback Deployment') {
+        stage('Rollback Setup') {
             when {
                 expression { params.ROLLBACK && params.ROLLBACK_TAG?.trim() }
             }
             steps {
                 script {
                     env.IMAGE_TAG = params.ROLLBACK_TAG
-                    echo "🔁 Rolling back to ${env.IMAGE_TAG}"
+                    echo "🔁 Rollback image tag set to ${env.IMAGE_TAG}"
                 }
             }
         }
@@ -111,7 +118,7 @@ ROLLBACK    : ${params.ROLLBACK}
             steps {
                 script {
                     def imageFull = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-                    echo "🐳 Building Docker image: ${imageFull}"
+                    echo "🐳 Building & pushing ${imageFull}"
 
                     sh """
                         docker build --pull --no-cache -t ${imageFull} .
@@ -129,14 +136,16 @@ ROLLBACK    : ${params.ROLLBACK}
                 dir('deployments') {
                     withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
                         sh """
-                            sed -i 's|image: ${env.IMAGE_NAME}:.*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
+                            echo "Updating image in ${env.DEPLOYMENT_FILE}"
+
+                            sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
 
                             kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE}
 
                             kubectl rollout status deployment/${env.DEPLOYMENT_NAME} \
                               -n ${env.NAMESPACE} \
                               --timeout=10m || {
-                                echo "Rollout failed. Rolling back..."
+                                echo "❌ Rollout failed → performing rollback"
                                 kubectl rollout undo deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE}
                                 exit 1
                               }
@@ -147,5 +156,6 @@ ROLLBACK    : ${params.ROLLBACK}
         }
     }
 }
+
 
 // on k3s cluster i have issue now it resloved.
