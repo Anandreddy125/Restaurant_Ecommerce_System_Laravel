@@ -84,7 +84,7 @@ ROLLBACK    : ${params.ROLLBACK}
             steps {
                 script {
                     env.IMAGE_TAG = params.ROLLBACK_TAG
-                    echo "🔁 Rollback image tag set to ${env.IMAGE_TAG}"
+                    echo "Rollback image tag set to ${env.IMAGE_TAG}"
                 }
             }
         }
@@ -112,7 +112,6 @@ ROLLBACK    : ${params.ROLLBACK}
             }
         }
 
-        /* 🔐 DOCKER LOGIN */
         stage('Docker Login') {
             when {
                 expression { env.IMAGE_TAG && !params.ROLLBACK }
@@ -130,7 +129,6 @@ ROLLBACK    : ${params.ROLLBACK}
             }
         }
 
-        /* 🐳 DOCKER BUILD & PUSH */
         stage('Docker Build & Push') {
             when {
                 expression { env.IMAGE_TAG && !params.ROLLBACK }
@@ -149,7 +147,6 @@ ROLLBACK    : ${params.ROLLBACK}
             }
         }
 
-        /* 🚀 DEPLOY TO KUBERNETES */
         stage('Deploy to Kubernetes') {
             when {
                 expression { env.IMAGE_TAG }
@@ -167,7 +164,7 @@ ROLLBACK    : ${params.ROLLBACK}
                             kubectl rollout status deployment/${env.DEPLOYMENT_NAME} \
                               -n ${env.NAMESPACE} \
                               --timeout=10m || {
-                                echo "❌ Rollout failed → rolling back"
+                                echo "Rollout failed → rolling back"
                                 kubectl rollout undo deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE}
                                 exit 1
                               }
@@ -175,6 +172,39 @@ ROLLBACK    : ${params.ROLLBACK}
                     }
                 }
             }
+        }
+    }
+    }
+    post {
+        success {
+            slackSend(
+                channel: '#jenkins-alerts',
+                color: '#36A64F',
+                tokenCredentialId: 'slack-token',
+                message: """
+✅ Deployment Successful
+Env: ${env.DEPLOY_ENV}
+Image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+${env.BUILD_URL}
+"""
+            )
+        }
+
+        failure {
+            slackSend(
+                channel: '#jenkins-alerts',
+                color: '#FF0000',
+                tokenCredentialId: 'slack-token',
+                message: """
+❌ Deployment Failed
+Env: ${env.DEPLOY_ENV}
+${env.BUILD_URL}
+"""
+            )
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
