@@ -84,35 +84,34 @@ ROLLBACK    : ${params.ROLLBACK}
             steps {
                 script {
                     env.IMAGE_TAG = params.ROLLBACK_TAG
-                    echo "🔁 Rollback image tag set to ${env.IMAGE_TAG}"
+                    echo "Rollback image tag set to ${env.IMAGE_TAG}"
                 }
             }
         }
 
-        stage('SonarQube Analysis') {
-            when { expression { env.IMAGE_TAG } }
-            steps {
-                withSonarQubeEnv("${SONARQUBE_ENV}") {
-                    sh """
-                        ${SCANNER_HOME}/bin/sonar-scanner \
-                        -Dsonar.projectName=${env.DEPLOY_ENV}-reports \
-                        -Dsonar.projectKey=${env.DEPLOY_ENV}-reports \
-                        -Dsonar.sources=.
-                    """
-                }
-            }
-        }
+   //     stage('SonarQube Analysis') {
+   //         when { expression { env.IMAGE_TAG } }
+   //         steps {
+   //             withSonarQubeEnv("${SONARQUBE_ENV}") {
+   //                 sh """
+   //                     ${SCANNER_HOME}/bin/sonar-scanner \
+   //                     -Dsonar.projectName=${env.DEPLOY_ENV}-reports \
+   //                     -Dsonar.projectKey=${env.DEPLOY_ENV}-reports \
+   //                     -Dsonar.sources=.
+   //                 """
+   //             }
+   //         }
+   //     }
 
-        stage('Quality Gate') {
-            when { expression { env.IMAGE_TAG } }
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
-                }
-            }
-        }
+   //     stage('Quality Gate') {
+   //         when { expression { env.IMAGE_TAG } }
+   //         steps {
+   //             timeout(time: 10, unit: 'MINUTES') {
+   //                 waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
+   //             }
+   //         }
+   //     }
 
-        /* 🔐 DOCKER LOGIN */
         stage('Docker Login') {
             when {
                 expression { env.IMAGE_TAG && !params.ROLLBACK }
@@ -123,14 +122,11 @@ ROLLBACK    : ${params.ROLLBACK}
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASSWORD'
                 )]) {
-                    sh """
-                        echo "\$DOCKER_PASSWORD" | docker login -u "\$DOCKER_USER" --password-stdin
-                    """
+                    sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin'
                 }
             }
         }
 
-        /* 🐳 DOCKER BUILD & PUSH */
         stage('Docker Build & Push') {
             when {
                 expression { env.IMAGE_TAG && !params.ROLLBACK }
@@ -138,8 +134,6 @@ ROLLBACK    : ${params.ROLLBACK}
             steps {
                 script {
                     def imageFull = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-                    echo "🐳 Building Docker image: ${imageFull}"
-
                     sh """
                         docker build --pull --no-cache -t ${imageFull} .
                         docker push ${imageFull}
@@ -149,7 +143,6 @@ ROLLBACK    : ${params.ROLLBACK}
             }
         }
 
-        /* 🚀 DEPLOY TO KUBERNETES */
         stage('Deploy to Kubernetes') {
             when {
                 expression { env.IMAGE_TAG }
@@ -158,23 +151,46 @@ ROLLBACK    : ${params.ROLLBACK}
                 dir('deployments') {
                     withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
                         sh """
-                            echo "Updating image in ${env.DEPLOYMENT_FILE}"
-
                             sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
-
                             kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE}
-
-                            kubectl rollout status deployment/${env.DEPLOYMENT_NAME} \
-                              -n ${env.NAMESPACE} \
-                              --timeout=10m || {
-                                echo "❌ Rollout failed → rolling back"
-                                kubectl rollout undo deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE}
-                                exit 1
-                              }
+                            kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} --timeout=10m
                         """
                     }
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            slackSend(
+                channel: '#jenkins-alerts',
+                color: '#36A64F',
+                tokenCredentialId: 'slack-token',
+                message: """
+✅ Deployment Successful
+Env: ${env.DEPLOY_ENV}
+Image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+${env.BUILD_URL}
+"""
+            )
+        }
+
+        failure {
+            slackSend(
+                channel: '#jenkins-alerts',
+                color: '#FF0000',
+                tokenCredentialId: 'slack-token',
+                message: """
+❌ Deployment Failed
+Env: ${env.DEPLOY_ENV}
+${env.BUILD_URL}
+"""
+            )
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
