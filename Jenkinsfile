@@ -122,9 +122,7 @@ ROLLBACK    : ${params.ROLLBACK}
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASSWORD'
                 )]) {
-                    sh """
-                        echo "\$DOCKER_PASSWORD" | docker login -u "\$DOCKER_USER" --password-stdin
-                    """
+                    sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin'
                 }
             }
         }
@@ -136,8 +134,6 @@ ROLLBACK    : ${params.ROLLBACK}
             steps {
                 script {
                     def imageFull = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-                    echo "🐳 Building Docker image: ${imageFull}"
-
                     sh """
                         docker build --pull --no-cache -t ${imageFull} .
                         docker push ${imageFull}
@@ -155,26 +151,16 @@ ROLLBACK    : ${params.ROLLBACK}
                 dir('deployments') {
                     withKubeConfig(credentialsId: env.KUBERNETES_CREDENTIALS_ID) {
                         sh """
-                            echo "Updating image in ${env.DEPLOYMENT_FILE}"
-
                             sed -i 's|image: .*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|' ${env.DEPLOYMENT_FILE}
-
                             kubectl apply -f ${env.DEPLOYMENT_FILE} -n ${env.NAMESPACE}
-
-                            kubectl rollout status deployment/${env.DEPLOYMENT_NAME} \
-                              -n ${env.NAMESPACE} \
-                              --timeout=10m || {
-                                echo "Rollout failed → rolling back"
-                                kubectl rollout undo deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE}
-                                exit 1
-                              }
+                            kubectl rollout status deployment/${env.DEPLOYMENT_NAME} -n ${env.NAMESPACE} --timeout=10m
                         """
                     }
                 }
             }
         }
     }
-    }
+
     post {
         success {
             slackSend(
