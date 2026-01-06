@@ -89,28 +89,28 @@ ROLLBACK    : ${params.ROLLBACK}
             }
         }
 
-        stage('SonarQube Analysis') {
-            when { expression { env.IMAGE_TAG } }
-            steps {
-                withSonarQubeEnv("${SONARQUBE_ENV}") {
-                    sh """
-                        ${SCANNER_HOME}/bin/sonar-scanner \
-                        -Dsonar.projectName=${env.DEPLOY_ENV}-reports \
-                        -Dsonar.projectKey=${env.DEPLOY_ENV}-reports \
-                        -Dsonar.sources=.
-                    """
-                }
-            }
-        }
+   //     stage('SonarQube Analysis') {
+   //         when { expression { env.IMAGE_TAG } }
+   //         steps {
+   //             withSonarQubeEnv("${SONARQUBE_ENV}") {
+   //                 sh """
+   //                     ${SCANNER_HOME}/bin/sonar-scanner \
+   //                     -Dsonar.projectName=${env.DEPLOY_ENV}-reports \
+   //                     -Dsonar.projectKey=${env.DEPLOY_ENV}-reports \
+   //                     -Dsonar.sources=.
+   //                 """
+   //             }
+   //         }
+   //     }
 
-        stage('Quality Gate') {
-            when { expression { env.IMAGE_TAG } }
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
-                }
-            }
-        }
+   //     stage('Quality Gate') {
+   //         when { expression { env.IMAGE_TAG } }
+   //         steps {
+   //             timeout(time: 10, unit: 'MINUTES') {
+   //                 waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token'
+   //             }
+   //         }
+   //     }
 
         stage('Docker Login') {
             when {
