@@ -1,3 +1,5 @@
+tested
+--------
 pipeline {
     agent any
 
@@ -16,12 +18,12 @@ pipeline {
         booleanParam(
             name: 'ROLLBACK',
             defaultValue: false,
-            description: 'Rollback using existing Docker image'
+            description: 'Rollback using TARGET_VERSION'
         )
         string(
             name: 'TARGET_VERSION',
             defaultValue: '',
-            description: 'Docker image tag to rollback to'
+            description: 'Docker tag for rollback'
         )
     }
 
@@ -40,8 +42,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 checkout scm
-                sh "git log -1 --oneline"
-                echo "Checked out branch: ${env.BRANCH_NAME}"
+                echo "Checked out ref: ${env.BRANCH_NAME}"
             }
         }
 
@@ -49,8 +50,7 @@ pipeline {
             steps {
                 script {
 
-                    // ================= STAGING =================
-                    if (env.BRANCH_NAME == "staging") {
+                    if (env.BRANCH_NAME?.startsWith('v')) {
                         env.DEPLOY_ENV = "production"
                         env.IMAGE_NAME = "anrs125/staging-image"
                         env.KUBERNETES_CREDENTIALS_ID = "testing-k3s"
@@ -60,13 +60,7 @@ pipeline {
                         env.TAG_TYPE = "release"
                     }
 
-                    // ================= PRODUCTION =================
-                    else if (env.BRANCH_NAME == "master") {
-
-                        if (!env.GIT_TAG_NAME) {
-                            error("❌ Production deployment must be triggered by a Git tag (vX.Y.Z)")
-                        }
-
+                    else if (env.BRANCH_NAME == "staging") {
                         env.DEPLOY_ENV = "staging"
                         env.IMAGE_NAME = "anrs125/staging-imaget"
                         env.KUBERNETES_CREDENTIALS_ID = "reports-staging"
@@ -75,35 +69,37 @@ pipeline {
                         env.TAG_TYPE = "commit"
                     }
 
-                    else {
+                    else if (env.BRANCH_NAME == "master") {
+                        echo "Master branch detected — no deployment will run"
                         env.SKIP_DEPLOY = "true"
-                        echo "ℹ️ No deployment for branch: ${env.BRANCH_NAME}"
                         return
                     }
 
+                    else {
+                        error("Unsupported ref: ${env.BRANCH_NAME}")
+                    }
+
                     echo """
-                    ==================================
-                    ENV        : ${env.DEPLOY_ENV}
-                    BRANCH     : ${env.BRANCH_NAME}
+                    ===============================
+                    DEPLOY ENV : ${env.DEPLOY_ENV}
+                    REF        : ${env.BRANCH_NAME}
+                    IMAGE      : ${env.IMAGE_NAME}
                     TAG TYPE   : ${env.TAG_TYPE}
-                    ==================================
+                    ===============================
                     """
                 }
             }
         }
 
-        stage('Generate Docker Tag (Merge Commit)') {
-            when { expression { env.TAG_TYPE == "merge-commit" } }
+        stage('Generate Image Tag') {
+            when { expression { env.TAG_TYPE == "commit" } }
             steps {
                 script {
-                    def mergeCommitId = sh(
+                    def commitId = sh(
                         script: "git rev-parse --short HEAD",
                         returnStdout: true
                     ).trim()
-
-                    env.IMAGE_TAG = "staging-${mergeCommitId}"
-
-                    echo "Using merge commit ID for image tag: ${env.IMAGE_TAG}"
+                    env.IMAGE_TAG = "staging-${commitId}"
                 }
             }
         }
@@ -130,6 +126,7 @@ pipeline {
                 """
             }
         }
-
     }
 }
+
+//staging-master-dev
