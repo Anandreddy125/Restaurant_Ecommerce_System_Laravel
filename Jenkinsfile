@@ -9,13 +9,20 @@ pipeline {
 
     environment {
         DOCKER_CREDENTIALS_ID = "docker-test"
-        SONARQUBE_ENV         = "sonar-server"
         NAMESPACE             = "reports"
     }
 
     parameters {
-        booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Rollback using TARGET_VERSION')
-        string(name: 'TARGET_VERSION', defaultValue: '', description: 'Docker tag for rollback')
+        booleanParam(
+            name: 'ROLLBACK',
+            defaultValue: false,
+            description: 'Rollback using TARGET_VERSION'
+        )
+        string(
+            name: 'TARGET_VERSION',
+            defaultValue: '',
+            description: 'Docker tag for rollback'
+        )
     }
 
     triggers {
@@ -33,51 +40,25 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 checkout scm
-                echo "BRANCH_NAME = ${env.BRANCH_NAME}"
-                echo "TAG_NAME    = ${env.TAG_NAME}"
-            }
-        }
-
-        /* =====================================================
-           Decide if pipeline should run
-           ===================================================== */
-        stage('Validate Trigger') {
-            steps {
-                script {
-                    // Production → ONLY tag
-                    if (env.TAG_NAME) {
-                        env.PIPELINE_MODE = "production"
-                        return
-                    }
-
-                    // Staging → branch push
-                    if (env.BRANCH_NAME == "staging") {
-                        env.PIPELINE_MODE = "staging"
-                        return
-                    }
-
-                    // Everything else → skip
-                    echo "Skipping build for ${env.BRANCH_NAME}"
-                    currentBuild.result = 'NOT_BUILT'
-                    error("Unsupported trigger")
-                }
+                echo "Checked out ref: ${env.BRANCH_NAME}"
             }
         }
 
         stage('Determine Environment') {
             steps {
                 script {
-                    if (env.PIPELINE_MODE == "production") {
+
+                    if (env.BRANCH_NAME?.startsWith('v')) {
                         env.DEPLOY_ENV = "production"
                         env.IMAGE_NAME = "anrs125/staging-image"
-                        env.IMAGE_TAG  = env.TAG_NAME
                         env.KUBERNETES_CREDENTIALS_ID = "testing-k3s"
                         env.DEPLOYMENT_FILE = "prod-reports.yaml"
                         env.DEPLOYMENT_NAME = "prod-reports"
+                        env.IMAGE_TAG = env.BRANCH_NAME
                         env.TAG_TYPE = "release"
                     }
 
-                    if (env.PIPELINE_MODE == "staging") {
+                    else if (env.BRANCH_NAME == "staging") {
                         env.DEPLOY_ENV = "staging"
                         env.IMAGE_NAME = "anrs125/staging-imaget"
                         env.KUBERNETES_CREDENTIALS_ID = "reports-staging"
@@ -86,11 +67,20 @@ pipeline {
                         env.TAG_TYPE = "commit"
                     }
 
+                    else if (env.BRANCH_NAME == "master") {
+                        echo "Master branch detected — no deployment will run"
+                        env.SKIP_DEPLOY = "true"
+                        return
+                    }
+
+                    else {
+                        error("Unsupported ref: ${env.BRANCH_NAME}")
+                    }
+
                     echo """
                     ===============================
-                    MODE       : ${env.PIPELINE_MODE}
                     DEPLOY ENV : ${env.DEPLOY_ENV}
-                    REF        : ${env.BRANCH_NAME ?: env.TAG_NAME}
+                    REF        : ${env.BRANCH_NAME}
                     IMAGE      : ${env.IMAGE_NAME}
                     TAG TYPE   : ${env.TAG_TYPE}
                     ===============================
@@ -99,8 +89,8 @@ pipeline {
             }
         }
 
-        stage('Generate Image Tag (Staging)') {
-            when { expression { env.PIPELINE_MODE == "staging" } }
+        stage('Generate Image Tag') {
+            when { expression { env.TAG_TYPE == "commit" } }
             steps {
                 script {
                     def commitId = sh(
@@ -113,7 +103,7 @@ pipeline {
         }
 
         stage('Docker Login') {
-            when { expression { !params.ROLLBACK } }
+            when { expression { env.SKIP_DEPLOY != "true" && !params.ROLLBACK } }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: env.DOCKER_CREDENTIALS_ID,
@@ -126,7 +116,7 @@ pipeline {
         }
 
         stage('Docker Build & Push') {
-            when { expression { !params.ROLLBACK } }
+            when { expression { env.SKIP_DEPLOY != "true" && !params.ROLLBACK } }
             steps {
                 sh """
                     docker build --no-cache -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} .
@@ -134,26 +124,5 @@ pipeline {
                 """
             }
         }
-
-        stage('Rollback') {
-            when { expression { params.ROLLBACK } }
-            steps {
-                script {
-                    if (!params.TARGET_VERSION) {
-                        error("TARGET_VERSION is required for rollback")
-                    }
-                    echo "Rolling back to version ${params.TARGET_VERSION}"
-                }
-            }
-        }
-    }
-
-    post {
-        always {
-            cleanWs()
-        }
     }
 }
-
-
-//updated jenkinsfile change happens
