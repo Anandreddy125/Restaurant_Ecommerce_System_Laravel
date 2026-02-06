@@ -1,5 +1,3 @@
-tested
---------
 pipeline {
     agent any
 
@@ -130,3 +128,4 @@ pipeline {
 }
 
 //staging-master-dev-anand
+//jenkinsfile syntax error
